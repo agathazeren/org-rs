@@ -157,6 +157,22 @@ impl<'a> Cursor<'a> {
         }
     }
 
+
+    /// Count the number of boundaries between two points.
+    pub fn count_between<M: Metric>(&self, begin: usize, end: usize) -> usize{
+        let mut cur = Cursor{..*self};
+        cur.set(begin);
+        let mut cnt = 0;
+        if cur.is_boundary::<M>() {
+            cnt += 1;
+        }
+        while cur.pos() < end {
+            cur.next::<M>();
+            cnt += 1;
+        }
+        cnt
+    }
+
     /// Skip over space, tabs and newline characters
     /// Cursor position is set before next non-whitespace char
     pub fn skip_whitespace(&mut self) -> usize {
@@ -166,6 +182,20 @@ impl<'a> Cursor<'a> {
                 break;
             } else {
                 self.get_next_char();
+            }
+        }
+        self.pos()
+    }
+
+    /// Skip over space, tabs and newline characters, going backwards
+    /// Cursor position is set before the previous non-whitespace char
+    pub fn skip_whitespace_backwards(&mut self) -> usize {
+        while let Some(c) = self.get_prev_char() {
+            if !(c.is_whitespace()) {
+                self.get_next_char();
+                break;
+            } else {
+                self.get_prev_char();
             }
         }
         self.pos()
@@ -520,6 +550,13 @@ mod test {
     }
 
     #[test]
+    fn count_between() {
+        let input = "\n \n \n";
+        let cursor = Cursor::new(&input, 0);
+        assert_eq!(3,cursor.count_between::<LinesMetric>(0, 5));
+    }
+
+    #[test]
     fn looking_at_headline() {
         let rope = "Some text\n**** headline\n";
         let mut cursor = Cursor::new(&rope, 0);
@@ -605,6 +642,25 @@ mod test {
         cursor = Cursor::new(&rope3, 0);
         cursor.skip_whitespace();
         assert_eq!(None, cursor.get_next_char());
+    }
+
+    #[test]
+    fn skip_whitespaces_backwards() {
+        let rope = " org-mode \n\t\r";
+        let mut cursor = Cursor::new(&rope, rope.len() - 1);
+        cursor.skip_whitespace_backwards();
+        assert_eq!(cursor.get_next_char().unwrap(), 'e');
+
+        let rope2 = "no_whitespace_for_you!";
+        cursor = Cursor::new(&rope2, rope2.len() - 1);
+        cursor.skip_whitespace_backwards();
+        assert_eq!(cursor.get_next_char().unwrap(), '!');
+
+        // Skipping all the remaining whitespace results in invalid cursor at the beginning of the rope
+        let rope3 = " ";
+        cursor = Cursor::new(&rope3, 1);
+        cursor.skip_whitespace_backwards();
+        assert_eq!(None, cursor.get_prev_char());
     }
 
     #[test]
